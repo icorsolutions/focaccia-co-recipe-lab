@@ -1,6 +1,6 @@
 import { useState, useEffect, useRef } from 'react';
 import {
-  ChefHat, Plus, Trash2, Send, Edit2, Save, X,
+  ChefHat, Plus, Trash2, Send, Edit2, Save, X, Check,
   Sparkles, Loader2, Eraser, BookOpen
 } from 'lucide-react';
 import { api } from './lib/api.js';
@@ -109,6 +109,19 @@ export default function RecipesPanel({ recipeType }) {
     }
   };
 
+  const renameRecipe = async (id, newName) => {
+    const trimmed = newName.trim();
+    if (!trimmed) return;
+    const recipe = recipes.find(r => r.id === id);
+    if (!recipe || recipe.name === trimmed) return;
+    try {
+      const updated = await api.updateRecipe(id, { name: trimmed });
+      setRecipes(recipes.map(r => r.id === updated.id ? updated : r));
+    } catch (e) {
+      alert('Rename failed: ' + e.message);
+    }
+  };
+
   const askChef = async (userMessage, isInitialReview = false) => {
     if (!selected) return;
     if (!isInitialReview && !userMessage.trim()) return;
@@ -161,29 +174,15 @@ export default function RecipesPanel({ recipeType }) {
           </p>
         ) : (
           <ul className="space-y-1">
-            {filtered.map(r => {
-              const historyLen = (r.feedback_history || []).length;
-              return (
-                <li key={r.id}>
-                  <button
-                    onClick={() => { setSelectedId(r.id); setIsAdding(false); setIsEditing(false); }}
-                    className={`w-full text-left px-3 py-2 rounded-md text-sm transition-colors ${
-                      selectedId === r.id
-                        ? 'bg-red-50 text-red-900 font-medium'
-                        : 'hover:bg-stone-50 text-stone-700'
-                    }`}
-                  >
-                    <div className="truncate">{r.name}</div>
-                    {historyLen > 0 && (
-                      <div className="text-xs text-stone-400 mt-0.5 flex items-center gap-1">
-                        <Sparkles className="w-3 h-3" />
-                        {historyLen} chef note{historyLen > 1 ? 's' : ''}
-                      </div>
-                    )}
-                  </button>
-                </li>
-              );
-            })}
+            {filtered.map(r => (
+              <SidebarItem
+                key={r.id}
+                recipe={r}
+                isSelected={selectedId === r.id}
+                onSelect={() => { setSelectedId(r.id); setIsAdding(false); setIsEditing(false); }}
+                onRename={(newName) => renameRecipe(r.id, newName)}
+              />
+            ))}
           </ul>
         )}
       </aside>
@@ -217,6 +216,102 @@ export default function RecipesPanel({ recipeType }) {
         )}
       </main>
     </div>
+  );
+}
+
+function SidebarItem({ recipe, isSelected, onSelect, onRename }) {
+  const [isRenaming, setIsRenaming] = useState(false);
+  const [draft, setDraft] = useState(recipe.name);
+  const inputRef = useRef(null);
+  const historyLen = (recipe.feedback_history || []).length;
+
+  useEffect(() => {
+    if (isRenaming && inputRef.current) {
+      inputRef.current.focus();
+      inputRef.current.select();
+    }
+  }, [isRenaming]);
+
+  const startRename = (e) => {
+    e.stopPropagation();
+    setDraft(recipe.name);
+    setIsRenaming(true);
+  };
+
+  const commit = () => {
+    const trimmed = draft.trim();
+    if (trimmed && trimmed !== recipe.name) {
+      onRename(trimmed);
+    }
+    setIsRenaming(false);
+  };
+
+  const cancel = () => {
+    setDraft(recipe.name);
+    setIsRenaming(false);
+  };
+
+  if (isRenaming) {
+    return (
+      <li>
+        <div className={`flex items-center gap-1 px-2 py-1.5 rounded-md ${isSelected ? 'bg-red-50' : 'bg-stone-50'}`}>
+          <input
+            ref={inputRef}
+            type="text"
+            value={draft}
+            onChange={(e) => setDraft(e.target.value)}
+            onKeyDown={(e) => {
+              if (e.key === 'Enter') commit();
+              else if (e.key === 'Escape') cancel();
+            }}
+            onBlur={commit}
+            className="flex-1 min-w-0 px-1.5 py-0.5 text-sm bg-white border border-stone-300 rounded focus:outline-none focus:ring-1 focus:ring-red-700"
+          />
+          <button
+            onMouseDown={(e) => { e.preventDefault(); commit(); }}
+            title="Save"
+            className="p-1 text-green-700 hover:bg-green-50 rounded"
+          >
+            <Check className="w-3.5 h-3.5" />
+          </button>
+          <button
+            onMouseDown={(e) => { e.preventDefault(); cancel(); }}
+            title="Cancel"
+            className="p-1 text-stone-500 hover:bg-stone-100 rounded"
+          >
+            <X className="w-3.5 h-3.5" />
+          </button>
+        </div>
+      </li>
+    );
+  }
+
+  return (
+    <li className="group relative">
+      <button
+        onClick={onSelect}
+        className={`w-full text-left px-3 py-2 pr-8 rounded-md text-sm transition-colors ${
+          isSelected
+            ? 'bg-red-50 text-red-900 font-medium'
+            : 'hover:bg-stone-50 text-stone-700'
+        }`}
+      >
+        <div className="truncate">{recipe.name}</div>
+        {historyLen > 0 && (
+          <div className="text-xs text-stone-400 mt-0.5 flex items-center gap-1">
+            <Sparkles className="w-3 h-3" />
+            {historyLen} chef note{historyLen > 1 ? 's' : ''}
+          </div>
+        )}
+      </button>
+      <button
+        onClick={startRename}
+        title="Rename"
+        className="absolute right-1 top-1.5 p-1 text-stone-400 opacity-0 group-hover:opacity-100 hover:text-stone-900 transition-opacity"
+      >
+        <Edit2 className="w-3.5 h-3.5" />
+      </button>
+    </li>
   );
 }
 

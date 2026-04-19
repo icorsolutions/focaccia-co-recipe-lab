@@ -1,5 +1,5 @@
 import { useState, useEffect, useRef } from 'react';
-import { ChefHat, Plus, Trash2, Send, Loader2, MessageCircle } from 'lucide-react';
+import { ChefHat, Plus, Trash2, Send, Loader2, MessageCircle, ChevronLeft } from 'lucide-react';
 import { api } from './lib/api.js';
 
 export default function ConsultationsPanel() {
@@ -61,7 +61,6 @@ export default function ConsultationsPanel() {
     setWaitingForChef(true);
     try {
       const updated = await api.chatConsultation(selected.id, msg);
-      // Move updated thread to top of list (most recently updated)
       setThreads([updated, ...threads.filter(t => t.id !== updated.id)]);
     } catch (e) {
       alert('Chef is busy in the back. ' + e.message);
@@ -77,13 +76,15 @@ export default function ConsultationsPanel() {
     );
   }
 
+  const mobileShowingDetail = !!selected;
+
   return (
-    <div className="max-w-7xl mx-auto px-4 py-4 grid grid-cols-1 lg:grid-cols-[280px_1fr] gap-4">
+    <div className="max-w-7xl mx-auto px-3 sm:px-4 py-3 sm:py-4 lg:grid lg:grid-cols-[280px_1fr] lg:gap-4">
       {/* Thread list */}
-      <aside className="bg-white rounded-lg border border-stone-200 p-3 h-fit lg:sticky lg:top-28">
+      <aside className={`bg-white rounded-lg border border-stone-200 p-3 h-fit lg:sticky lg:top-28 ${mobileShowingDetail ? 'hidden lg:block' : 'block mb-3 lg:mb-0'}`}>
         <button
           onClick={newThread}
-          className="w-full flex items-center justify-center gap-2 bg-red-800 hover:bg-red-900 text-white text-sm font-medium py-2 rounded-md transition-colors mb-3"
+          className="w-full flex items-center justify-center gap-2 bg-red-800 hover:bg-red-900 active:bg-red-950 text-white text-sm font-medium py-2.5 rounded-md transition-colors mb-3"
         >
           <Plus className="w-4 h-4" />
           New conversation
@@ -100,10 +101,10 @@ export default function ConsultationsPanel() {
                 <li key={t.id} className="group relative">
                   <button
                     onClick={() => setSelectedId(t.id)}
-                    className={`w-full text-left px-3 py-2 pr-8 rounded-md text-sm transition-colors ${
+                    className={`w-full text-left px-3 py-2.5 pr-10 rounded-md text-sm transition-colors ${
                       selectedId === t.id
                         ? 'bg-red-50 text-red-900 font-medium'
-                        : 'hover:bg-stone-50 text-stone-700'
+                        : 'hover:bg-stone-50 active:bg-stone-100 text-stone-700'
                     }`}
                   >
                     <div className="truncate">{t.title}</div>
@@ -116,9 +117,10 @@ export default function ConsultationsPanel() {
                   <button
                     onClick={(e) => { e.stopPropagation(); deleteThread(t.id); }}
                     title="Delete conversation"
-                    className="absolute right-1 top-1.5 p-1 text-stone-400 opacity-0 group-hover:opacity-100 hover:text-red-700 transition-opacity"
+                    aria-label="Delete conversation"
+                    className="absolute right-1 top-1/2 -translate-y-1/2 p-2 text-stone-400 hover:text-red-700 active:text-red-800 hover:bg-red-50 active:bg-red-100 rounded transition-opacity lg:opacity-0 lg:group-hover:opacity-100"
                   >
-                    <Trash2 className="w-3.5 h-3.5" />
+                    <Trash2 className="w-4 h-4" />
                   </button>
                 </li>
               );
@@ -128,7 +130,17 @@ export default function ConsultationsPanel() {
       </aside>
 
       {/* Chat view */}
-      <main className="min-w-0">
+      <main className={`min-w-0 ${!mobileShowingDetail ? 'hidden lg:block' : 'block'}`}>
+        {mobileShowingDetail && (
+          <button
+            onClick={() => setSelectedId(null)}
+            className="lg:hidden mb-3 flex items-center gap-1 text-sm text-stone-600 hover:text-stone-900 active:text-stone-950 px-1 py-1"
+          >
+            <ChevronLeft className="w-4 h-4" />
+            All conversations
+          </button>
+        )}
+
         {selected ? (
           <ChatView
             thread={selected}
@@ -149,20 +161,20 @@ export default function ConsultationsPanel() {
 function ChatView({ thread, message, setMessage, onSend, waitingForChef, historyEndRef }) {
   const messages = thread.messages || [];
   return (
-    <div className="bg-white rounded-lg border border-stone-200 overflow-hidden flex flex-col" style={{ minHeight: 'calc(100vh - 180px)' }}>
-      <div className="bg-gradient-to-r from-stone-900 to-stone-800 text-white px-5 py-3 flex items-center gap-3">
+    <div className="bg-white rounded-lg border border-stone-200 overflow-hidden flex flex-col" style={{ minHeight: 'calc(100vh - 220px)' }}>
+      <div className="bg-gradient-to-r from-stone-900 to-stone-800 text-white px-4 sm:px-5 py-3 flex items-center gap-3">
         <div className="w-8 h-8 rounded-full bg-red-700 flex items-center justify-center flex-shrink-0">
           <ChefHat className="w-4 h-4" />
         </div>
         <div className="min-w-0 flex-1">
           <div className="text-sm font-semibold truncate">{thread.title}</div>
-          <div className="text-xs text-stone-300">Chef Matteo · Bologna · 25 years of panini</div>
+          <div className="text-xs text-stone-300 truncate">Chef Matteo · Bologna · 25 years of panini</div>
         </div>
       </div>
 
-      <div className="flex-1 p-5 overflow-y-auto">
+      <div className="flex-1 p-4 sm:p-5 overflow-y-auto">
         {messages.length === 0 ? (
-          <div className="h-full flex flex-col items-center justify-center text-center py-10">
+          <div className="h-full flex flex-col items-center justify-center text-center py-8 sm:py-10">
             <MessageCircle className="w-10 h-10 text-stone-300 mb-3" />
             <p className="text-sm text-stone-600 max-w-md">
               Ask Matteo anything. Ingredient pairings, spread combinations, oil choices, technique questions, supplier advice — whatever you're turning over.
@@ -177,7 +189,7 @@ function ChatView({ thread, message, setMessage, onSend, waitingForChef, history
                 <button
                   key={i}
                   onClick={() => setMessage(suggestion)}
-                  className="text-xs bg-stone-100 hover:bg-stone-200 text-stone-700 px-3 py-1.5 rounded-full transition-colors"
+                  className="text-xs bg-stone-100 hover:bg-stone-200 active:bg-stone-300 text-stone-700 px-3 py-2 rounded-full transition-colors"
                 >
                   {suggestion}
                 </button>
@@ -217,7 +229,7 @@ function ChatView({ thread, message, setMessage, onSend, waitingForChef, history
         )}
       </div>
 
-      <div className="border-t border-stone-100 p-4">
+      <div className="border-t border-stone-100 p-3 sm:p-4">
         <div className="flex gap-2">
           <textarea
             value={message}
@@ -225,19 +237,21 @@ function ChatView({ thread, message, setMessage, onSend, waitingForChef, history
             onKeyDown={(e) => {
               if (e.key === 'Enter' && (e.metaKey || e.ctrlKey)) onSend();
             }}
-            placeholder="Ask Matteo anything... (Cmd/Ctrl+Enter to send)"
+            placeholder="Ask Matteo anything..."
             rows={2}
             className="flex-1 px-3 py-2 border border-stone-300 rounded-md text-sm focus:outline-none focus:ring-2 focus:ring-red-700 focus:border-transparent resize-none"
           />
           <button
             onClick={onSend}
             disabled={!message.trim() || waitingForChef}
-            className="bg-red-800 hover:bg-red-900 disabled:bg-stone-300 disabled:cursor-not-allowed text-white px-4 rounded-md transition-colors flex items-center"
-            title="Send (Cmd/Ctrl+Enter)"
+            aria-label="Send message"
+            className="bg-red-800 hover:bg-red-900 active:bg-red-950 disabled:bg-stone-300 disabled:cursor-not-allowed text-white px-4 rounded-md transition-colors flex items-center justify-center min-w-[48px]"
+            title="Send (Cmd/Ctrl+Enter on desktop)"
           >
-            {waitingForChef ? <Loader2 className="w-4 h-4 animate-spin" /> : <Send className="w-4 h-4" />}
+            {waitingForChef ? <Loader2 className="w-5 h-5 animate-spin" /> : <Send className="w-5 h-5" />}
           </button>
         </div>
+        <p className="hidden sm:block text-xs text-stone-400 mt-1.5">Cmd/Ctrl+Enter to send</p>
       </div>
     </div>
   );
@@ -245,7 +259,7 @@ function ChatView({ thread, message, setMessage, onSend, waitingForChef, history
 
 function WelcomeState({ onNewThread, hasThreads }) {
   return (
-    <div className="bg-white rounded-lg border border-stone-200 p-12 text-center">
+    <div className="bg-white rounded-lg border border-stone-200 p-8 sm:p-12 text-center">
       <MessageCircle className="w-12 h-12 mx-auto text-stone-300 mb-3" />
       <h3 className="text-lg font-semibold text-stone-700 mb-1">
         {hasThreads ? 'Pick a conversation' : 'Have a question for Matteo?'}
@@ -258,7 +272,7 @@ function WelcomeState({ onNewThread, hasThreads }) {
       {!hasThreads && (
         <button
           onClick={onNewThread}
-          className="inline-flex items-center gap-2 bg-red-800 hover:bg-red-900 text-white text-sm font-medium px-4 py-2 rounded-md transition-colors"
+          className="inline-flex items-center gap-2 bg-red-800 hover:bg-red-900 active:bg-red-950 text-white text-sm font-medium px-4 py-2.5 rounded-md transition-colors"
         >
           <Plus className="w-4 h-4" />
           Start a conversation

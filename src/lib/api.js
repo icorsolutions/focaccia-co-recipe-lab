@@ -71,4 +71,9 @@ export const api = {
       method: 'POST',
       body: JSON.stringify({ consultationId, message }),
     }),
+
+  // Kitchen context
+  getKitchenContext: () => request('/api/kitchen-context'),
+  updateKitchenContext: (patch) =>
+    request('/api/kitchen-context', { method: 'PUT', body: JSON.stringify(patch) }),
 };

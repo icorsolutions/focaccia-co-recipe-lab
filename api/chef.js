@@ -16,7 +16,47 @@ What you care about, in order:
 5. Authenticity when a regional style is claimed, creativity otherwise
 6. Cost and kitchen efficiency — this is a business. Prep complexity matters.
 
+You already know the shop's standard bread, portions, equipment, price point, and constraints — they are listed in the KITCHEN CONTEXT section below. Do not ask the owner to repeat them. Reason concretely from those specs. If you're about to say "depending on your bread size" or "what's your target price", STOP — check the KITCHEN CONTEXT first. Only ask if a relevant field is genuinely blank.
+
 Keep most responses to 3-6 sentences. Go longer only when the topic genuinely demands it.`;
+
+const FIELD_LABELS = {
+  bread_size: 'Bread size',
+  bread_type: 'Bread type',
+  bread_source: 'Bread source',
+  protein_portion: 'Standard protein portion',
+  cheese_portion: 'Standard cheese portion',
+  finishing_equipment: 'Finishing equipment',
+  max_prep_time: 'Max prep time per sandwich',
+  target_price_range: 'Target price range',
+  target_food_cost: 'Target food cost %',
+  primary_customer: 'Primary customer',
+  dietary_requirements: 'Dietary requirements',
+  allergen_rules: 'Allergen rules',
+  location_market: 'Location / market',
+  notes: 'Other notes',
+};
+
+function formatKitchenContext(ctx) {
+  if (!ctx) return '';
+  const filled = Object.entries(FIELD_LABELS)
+    .map(([key, label]) => [label, (ctx[key] || '').trim()])
+    .filter(([, value]) => value.length > 0);
+  if (filled.length === 0) return '';
+  const lines = filled.map(([label, value]) => `- ${label}: ${value}`);
+  return `\n\n=== KITCHEN CONTEXT (applies to all recipes & questions) ===\n${lines.join('\n')}\n=== END KITCHEN CONTEXT ===`;
+}
+
+async function loadKitchenContext(supabase) {
+  try {
+    const { data } = await supabase
+      .from('kitchen_context').select('*').eq('id', 1).single();
+    return data;
+  } catch {
+    // Table might not exist yet (pre-migration) — fine, just return null
+    return null;
+  }
+}
 
 export default async function handler(req, res) {
   if (req.method !== 'POST') return json(res, 405, { error: 'Method not allowed' });
@@ -32,19 +72,21 @@ export default async function handler(req, res) {
   if (!apiKey) return json(res, 500, { error: 'Missing ANTHROPIC_API_KEY' });
 
   const supabase = getSupabase();
+  const kitchenContext = await loadKitchenContext(supabase);
+  const systemPrompt = CHEF_SYSTEM_PROMPT + formatKitchenContext(kitchenContext);
 
   try {
     if (recipeId) {
-      return await handleRecipeFeedback(supabase, apiKey, recipeId, message, isInitialReview, res);
+      return await handleRecipeFeedback(supabase, apiKey, systemPrompt, recipeId, message, isInitialReview, res);
     }
-    return await handleConsultation(supabase, apiKey, consultationId, message, res);
+    return await handleConsultation(supabase, apiKey, systemPrompt, consultationId, message, res);
   } catch (e) {
     console.error(e);
     return json(res, 500, { error: e.message || 'Server error' });
   }
 }
 
-async function handleRecipeFeedback(supabase, apiKey, recipeId, message, isInitialReview, res) {
+async function handleRecipeFeedback(supabase, apiKey, systemPrompt, recipeId, message, isInitialReview, res) {
   const { data: recipe, error: fetchErr } = await supabase
     .from('recipes').select('*').eq('id', recipeId).single();
   if (fetchErr || !recipe) return json(res, 404, { error: 'Recipe not found' });
@@ -78,7 +120,7 @@ ${recipe.notes ? `NOTES: ${recipe.notes}` : ''}`;
     messages.push({ role: 'user', content: isInitialReview ? 'Give me a fresh overall review of the recipe as it stands now.' : message });
   }
 
-  const chefText = await callClaude(apiKey, messages);
+  const chefText = await callClaude(apiKey, systemPrompt, messages);
 
   const userLabel = isInitialReview
     ? (history.length === 0 ? '(Asked Matteo for his first impression)' : '(Asked for a fresh overall review)')
@@ -96,7 +138,7 @@ ${recipe.notes ? `NOTES: ${recipe.notes}` : ''}`;
   return json(res, 200, updated);
 }
 
-async function handleConsultation(supabase, apiKey, consultationId, message, res) {
+async function handleConsultation(supabase, apiKey, systemPrompt, consultationId, message, res) {
   if (!message || !message.trim()) return json(res, 400, { error: 'message required' });
 
   const { data: thread, error: fetchErr } = await supabase
@@ -105,11 +147,10 @@ async function handleConsultation(supabase, apiKey, consultationId, message, res
 
   const existingMessages = thread.messages || [];
 
-  // Build message array for the API call
   const apiMessages = existingMessages.map(m => ({ role: m.role, content: m.content }));
   apiMessages.push({ role: 'user', content: message });
 
-  const chefText = await callClaude(apiKey, apiMessages);
+  const chefText = await callClaude(apiKey, systemPrompt, apiMessages);
 
   const now = new Date().toISOString();
   const newMessages = [
@@ -118,7 +159,6 @@ async function handleConsultation(supabase, apiKey, consultationId, message, res
     { role: 'assistant', content: chefText, ts: new Date().toISOString() },
   ];
 
-  // Auto-title from first user message if still default
   const patch = { messages: newMessages };
   if (thread.title === 'New conversation' && existingMessages.length === 0) {
     patch.title = message.length > 50 ? message.slice(0, 50).trim() + '…' : message.trim();
@@ -131,7 +171,7 @@ async function handleConsultation(supabase, apiKey, consultationId, message, res
   return json(res, 200, updated);
 }
 
-async function callClaude(apiKey, messages) {
+async function callClaude(apiKey, systemPrompt, messages) {
   const resp = await fetch('https://api.anthropic.com/v1/messages', {
     method: 'POST',
     headers: {
@@ -142,7 +182,7 @@ async function callClaude(apiKey, messages) {
     body: JSON.stringify({
       model: 'claude-sonnet-4-5-20250929',
       max_tokens: 1024,
-      system: CHEF_SYSTEM_PROMPT,
+      system: systemPrompt,
       messages,
     }),
   });

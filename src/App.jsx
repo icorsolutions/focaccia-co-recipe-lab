@@ -83,7 +83,7 @@ export default function App() {
         <button
           type="submit"
           disabled={!password || busy}
-          className="mt-4 w-full bg-red-800 hover:bg-red-900 disabled:bg-stone-300 text-white text-sm font-medium py-2 rounded-md transition-colors flex items-center justify-center gap-2"
+          className="mt-4 w-full bg-red-800 hover:bg-red-900 active:bg-red-950 disabled:bg-stone-300 text-white text-sm font-medium py-2.5 rounded-md transition-colors flex items-center justify-center gap-2"
         >
           {busy ? <Loader2 className="w-4 h-4 animate-spin" /> : 'Enter'}
         </button>
